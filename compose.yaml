@@ -32,6 +32,8 @@ services:
       OIDC_ISSUER: ${OIDC_ISSUER:-}
     secrets: [postgres_password, database_url]
     networks: [data]
+    healthcheck:
+      disable: true
     depends_on:
       db:
         condition: service_healthy
@@ -50,11 +52,6 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-    healthcheck:
-      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/api/health/ready', timeout=4).close()"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
     restart: unless-stopped
 
   worker:
@@ -84,9 +81,11 @@ services:
       dockerfile: deploy/Web.Dockerfile
     environment:
       HUB_HOST: ${HUB_HOST:-localhost}
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     ports:
-      - "${BIND_ADDRESS:-127.0.0.1}:80:80"
-      - "${BIND_ADDRESS:-127.0.0.1}:443:443"
+      - "${BIND_ADDRESS:-127.0.0.1}:80:8080"
+      - "${BIND_ADDRESS:-127.0.0.1}:443:8443"
     volumes: [caddy_data:/data, caddy_config:/config]
     networks: [edge, proxy]
     depends_on:
@@ -101,6 +100,8 @@ services:
       dockerfile: deploy/Backup.Dockerfile
     environment:
       AGE_RECIPIENT: ${AGE_RECIPIENT:-}
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     secrets: [postgres_password]
     volumes: ["./backups:/backups"]
     networks: [data]

@@ -39,3 +39,28 @@ jobs:
         working-directory: web
       - run: docker compose config --quiet
       - run: docker compose build api web backup
+      - name: Verify Compose startup and encrypted backup
+        shell: bash
+        run: |
+          umask 077
+          mkdir secrets backups
+          openssl rand -hex 32 > secrets/postgres_password
+          printf 'host=db dbname=knowledgehub user=hub_runtime password=%s\n' \
+            "$(openssl rand -hex 32)" > secrets/database_url
+          printf 'synthetic-ci-value\n' > secrets/oidc_client_secret
+          printf 'synthetic-ci-value\n' > secrets/openai_api_key
+          sudo chgrp 10001 secrets/* backups
+          sudo chmod 0640 secrets/*
+          sudo chmod 0770 backups
+          docker compose up -d --wait --wait-timeout 120
+          ca_file="$(mktemp)"
+          docker compose exec -T web cat /data/caddy/pki/authorities/local/root.crt > "$ca_file"
+          curl --fail --silent --show-error --cacert "$ca_file" https://localhost/api/health/ready
+          test "$(curl --silent -o /dev/null -w '%{redirect_url}' http://localhost/)" = 'https://localhost/'
+          recipient="$(docker compose run --rm -T --no-deps --entrypoint sh backup -ec \
+            'age-keygen -o /tmp/ci-age-key 2>/dev/null; age-keygen -y /tmp/ci-age-key')"
+          AGE_RECIPIENT="$recipient" docker compose run --rm -T backup
+          sudo grep -a -m1 -q '^age-encryption.org/v1$' backups/*.dump.age
+      - name: Show deployment status
+        if: failure()
+        run: docker compose ps --all && docker compose logs --tail 50

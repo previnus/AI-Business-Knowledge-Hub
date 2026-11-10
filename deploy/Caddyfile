@@ -1,11 +1,22 @@
 {
 	admin off
+	http_port 8080
+	https_port 8443
+	skip_install_trust
 	servers {
 		timeouts {
 			read_header 10s
 			read_body 45s
 			idle 2m
 		}
+	}
+}
+
+http://127.0.0.1:9080 {
+	bind 127.0.0.1
+	handle /healthz {
+		rewrite * /api/health/ready
+		reverse_proxy api:8000
 	}
 }
 
