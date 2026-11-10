@@ -1,6 +1,7 @@
 [project]
 name = "company-knowledge-hub"
 version = "0.1.0"
+authors = [{ name = "Previn Kalisetty Appadu" }]
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "authlib>=1.6",
@@ -17,6 +18,9 @@ dependencies = [
     "tiktoken>=0.12",
     "uvicorn>=0.38",
 ]
+
+[project.urls]
+Author = "https://previn.me"
 
 [dependency-groups]
 dev = ["httpx2>=2", "pytest>=9", "ruff>=0.14"]

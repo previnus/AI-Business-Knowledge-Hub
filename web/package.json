@@ -1,6 +1,10 @@
 {
   "name": "company-knowledge-hub-web",
   "version": "0.1.0",
+  "author": {
+    "name": "Previn Kalisetty Appadu",
+    "url": "https://previn.me"
+  },
   "private": true,
   "type": "module",
   "scripts": {

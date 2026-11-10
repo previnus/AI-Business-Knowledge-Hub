@@ -2,6 +2,8 @@
 
 Knowledge Hub answers employee questions with links to the passages it used. Central admins ingest company PDFs, Markdown and UTF-8 text files, and individual public HTTPS pages. Employees sign in through company SSO and can access sources shared with their knowledge groups.
 
+Created by [Previn Kalisetty Appadu](https://previn.me).
+
 This project is licensed under the GNU General Public License version 3 only (`GPL-3.0-only`). [License text](LICENSE)
 
 ## Preview locally
