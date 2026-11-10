@@ -76,7 +76,7 @@ class OpenAIProvider:
                         "strict": True,
                     }
                 },
-                max_output_tokens=128,
+                max_output_tokens=1200,
             )
         except (APIError, ValueError) as exc:
             raise provider_failure(exc) from None
