@@ -1,0 +1,38 @@
+{
+	admin off
+	servers {
+		timeouts {
+			read_header 10s
+			read_body 45s
+			idle 2m
+		}
+	}
+}
+
+{$HUB_HOST:localhost} {
+	encode zstd gzip
+	header {
+		Content-Security-Policy "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; object-src 'none'"
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+	@api path /api/*
+	handle @api {
+		request_body {
+			max_size 26279936
+		}
+		reverse_proxy api:8000 {
+			header_up X-Hub-Client-IP {http.request.remote.host}
+		}
+	}
+	handle /metrics {
+		respond 404
+	}
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

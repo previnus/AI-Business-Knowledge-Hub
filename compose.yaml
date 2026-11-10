@@ -1,0 +1,132 @@
+name: knowledge-hub
+
+x-runtime: &runtime
+  build: .
+  init: true
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  tmpfs: ["/tmp:rw,nosuid,nodev,size=128m,mode=1777"]
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.6-pg16
+    environment:
+      POSTGRES_DB: knowledgehub
+      POSTGRES_USER: hub_owner
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password]
+    volumes: [postgres:/var/lib/postgresql/data]
+    networks: [data]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "hub_owner", "-d", "knowledgehub"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    <<: *runtime
+    command: ["python", "-m", "hub.manage", "migrate"]
+    environment:
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+    secrets: [postgres_password, database_url]
+    networks: [data]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *runtime
+    environment:
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-https://localhost}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_TOKEN_AUTH: ${OIDC_TOKEN_AUTH:-client_secret_basic}
+      OPENAI_ANSWER_MODEL: ${OPENAI_ANSWER_MODEL:-gpt-4.1-mini}
+      WEB_HOSTS: ${WEB_HOSTS:-}
+    secrets: [database_url, oidc_client_secret, openai_api_key]
+    networks: [proxy, data, egress]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/api/health/ready', timeout=4).close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  worker:
+    <<: *runtime
+    command: ["python", "-m", "hub.worker"]
+    mem_limit: 1200m
+    tmpfs:
+      - "/tmp:rw,nosuid,nodev,size=128m,mode=1777"
+      - "/run/hub-worker:rw,nosuid,nodev,size=1m,mode=0700,uid=10001,gid=10001"
+    environment:
+      WEB_HOSTS: ${WEB_HOSTS:-}
+    secrets: [database_url, openai_api_key]
+    networks: [data, egress]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,time; assert time.time()-os.stat('/run/hub-worker/health').st_mtime < 150"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Web.Dockerfile
+    environment:
+      HUB_HOST: ${HUB_HOST:-localhost}
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:80:80"
+      - "${BIND_ADDRESS:-127.0.0.1}:443:443"
+    volumes: [caddy_data:/data, caddy_config:/config]
+    networks: [edge, proxy]
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  backup:
+    profiles: [tools]
+    build:
+      context: .
+      dockerfile: deploy/Backup.Dockerfile
+    environment:
+      AGE_RECIPIENT: ${AGE_RECIPIENT:-}
+    secrets: [postgres_password]
+    volumes: ["./backups:/backups"]
+    networks: [data]
+    depends_on:
+      db:
+        condition: service_healthy
+
+networks:
+  data:
+    internal: true
+  proxy:
+    internal: true
+  edge:
+  egress:
+
+volumes:
+  postgres:
+  caddy_data:
+  caddy_config:
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password
+  database_url:
+    file: ./secrets/database_url
+  oidc_client_secret:
+    file: ./secrets/oidc_client_secret
+  openai_api_key:
+    file: ./secrets/openai_api_key
