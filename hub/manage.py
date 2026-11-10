@@ -52,7 +52,7 @@ def main():
     sub.add_parser("migrate")
     grant = sub.add_parser("grant-admin")
     grant.add_argument("subject")
-    revoke = sub.add_parser("disable-admin")
+    revoke = sub.add_parser("disable-admin", help="Disable an administrator and revoke their sessions")
     revoke.add_argument("subject")
     args = parser.parse_args()
     if args.operation != "migrate":
@@ -75,16 +75,20 @@ def main():
                         (issuer, args.subject),
                     )
                 else:
-                    db.execute(
+                    disabled = db.execute(
                         """
-                        WITH disabled AS (
-                            UPDATE users SET is_admin = false, enabled = false
-                            WHERE issuer = %s AND subject = %s AND is_admin RETURNING id
-                        )
-                        DELETE FROM sessions WHERE user_id IN (SELECT id FROM disabled)
-                    """,
+                        UPDATE users SET is_admin = false, enabled = false
+                        WHERE issuer = %s AND subject = %s AND (is_admin OR NOT enabled)
+                        RETURNING id
+                        """,
                         (issuer, args.subject),
-                    )
+                    ).fetchone()
+                    if disabled is None:
+                        raise SystemExit("No administrator matched the configured issuer and subject.")
+                    # Use a fresh snapshot after the account update waits for any concurrent sign-in.
+                    db.execute("DELETE FROM sessions WHERE user_id = %s", (disabled[0],))
+            if args.operation == "disable-admin":
+                print("Account disabled and sessions revoked.")
     except (psycopg.Error, OSError, ValueError):
         raise SystemExit("Deployment command failed. Check database and secret configuration.") from None
 

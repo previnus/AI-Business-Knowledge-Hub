@@ -39,8 +39,11 @@ jobs:
         working-directory: web
       - run: docker compose config --quiet
       - run: docker compose build api web backup
-      - name: Verify Compose startup and encrypted backup
+      - name: Verify Compose startup, administrator setup, and encrypted backup
         shell: bash
+        env:
+          OIDC_ISSUER: https://identity.example.test
+          OIDC_CLIENT_ID: knowledge-hub-ci
         run: |
           umask 077
           mkdir secrets backups
@@ -57,6 +60,10 @@ jobs:
           docker compose exec -T web cat /data/caddy/pki/authorities/local/root.crt > "$ca_file"
           curl --fail --silent --show-error --cacert "$ca_file" https://localhost/api/health/ready
           test "$(curl --silent -o /dev/null -w '%{redirect_url}' http://localhost/)" = 'https://localhost/'
+          test "$(curl --silent --show-error --cacert "$ca_file" -o /dev/null -w '%{http_code}' https://localhost/api/me)" = 401
+          test "$(curl --silent --show-error --cacert "$ca_file" -o /dev/null -w '%{http_code}' https://localhost/metrics)" = 404
+          docker compose run --rm -T migrate python -m hub.manage grant-admin synthetic-admin
+          docker compose run --rm -T migrate python -m hub.manage disable-admin synthetic-admin
           recipient="$(docker compose run --rm -T --no-deps --entrypoint sh backup -ec \
             'age-keygen -o /tmp/ci-age-key 2>/dev/null; age-keygen -y /tmp/ci-age-key')"
           AGE_RECIPIENT="$recipient" docker compose run --rm -T backup

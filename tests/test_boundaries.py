@@ -1,5 +1,6 @@
 import hashlib
 import json
+import sys
 import time
 from base64 import urlsafe_b64encode
 from urllib.parse import parse_qs, urlsplit
@@ -7,11 +8,11 @@ from urllib.parse import parse_qs, urlsplit
 import httpx
 import httpx2
 import pytest
-from conftest import ISSUER, ORIGIN, make_pdf
+from conftest import ADMIN_TOKEN, ALPHA_TOKEN, ISSUER, ORIGIN, headers, make_pdf
 from joserfc import jwt
 from joserfc.jwk import RSAKey
 
-from hub import auth, fetch
+from hub import auth, fetch, manage
 from hub.ai import Draft, OpenAIProvider
 from hub.extract import extract
 from hub.search import evidence_for_model, verified_segments
@@ -296,3 +297,31 @@ def test_protected_write_checks_session_without_reading_the_body(hub):
     )
     assert response.status_code == 401
     assert reads == []
+
+
+def test_disable_admin_confirms_revocation_for_the_exact_account(hub, db_url, monkeypatch, capsys):
+    client, pool, _, _, _, users = hub
+    monkeypatch.setattr(manage, "owner_connection", lambda: db_url)
+
+    def disable(issuer, subject):
+        monkeypatch.setenv("OIDC_ISSUER", issuer)
+        monkeypatch.setattr(sys, "argv", ["hub.manage", "disable-admin", subject])
+        manage.main()
+
+    with pytest.raises(SystemExit, match="No administrator matched"):
+        disable("https://other-identity.test", "administrator")
+    with pytest.raises(SystemExit, match="No administrator matched"):
+        disable(ISSUER, "employee-a")
+    assert client.get("/api/me", headers=headers(ADMIN_TOKEN)).json()["is_admin"]
+    assert client.get("/api/me", headers=headers(ALPHA_TOKEN)).status_code == 200
+
+    disable(ISSUER, "administrator")
+    assert capsys.readouterr().out.strip() == "Account disabled and sessions revoked."
+    assert client.get("/api/me", headers=headers(ADMIN_TOKEN)).status_code == 401
+    with pool.connection() as db:
+        account = db.execute("SELECT is_admin, enabled FROM users WHERE id = %s", (users[0],)).fetchone()
+        assert account == {"is_admin": False, "enabled": False}
+        assert db.execute("SELECT 1 FROM sessions WHERE user_id = %s", (users[0],)).fetchone() is None
+
+    disable(ISSUER, "administrator")
+    assert capsys.readouterr().out.strip() == "Account disabled and sessions revoked."
