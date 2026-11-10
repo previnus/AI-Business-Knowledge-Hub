@@ -53,4 +53,4 @@ npm --prefix web ci --ignore-scripts
 npm --prefix web run build
 ```
 
-The app is single-turn and uses English keyword indexing. It accepts text PDFs up to 500 pages, file uploads up to 25 MiB, and static HTML pages up to 5 MiB. Scanned documents need a text layer before upload. A citation verifies where a quote came from. Check the source before relying on a generated claim for a sensitive decision, and evaluate answer support with a small, approved pilot corpus before expanding access.
+The app is single-turn and uses English keyword indexing. It accepts text PDFs up to 500 pages, file uploads up to 25 MiB, and static HTML pages up to 5 MiB. Scanned documents need a text layer before upload. Answers display complete indexed passages in the source's own wording. The model selects which passages to show, so check the original context for sensitive decisions and evaluate passage selection with an approved pilot corpus before expanding access.

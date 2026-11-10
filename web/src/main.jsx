@@ -66,14 +66,13 @@ function Ask({ openCitation }) {
             ? <p>I couldn’t find enough evidence in the sources you can access to answer this question.</p>
             : answer.segments.map((segment, index) => (
               <div className="answer-segment" key={index}>
-                <p>{segment.text}</p>
+                <blockquote>{segment.text}</blockquote>
                 <ul className="citations">
                   {segment.citations.map(citation => <li key={citation.id}>
-                    <a className="citation-link" href={citation.url} title={citation.quote}
+                    <a className="citation-link" href={citation.url}
                       onClick={event => openCitation(event, citation.id)}>
                       <FileText size={14} /> {citation.title} · {citation.location}
                     </a>
-                    <blockquote>{citation.quote}</blockquote>
                   </li>)}
                 </ul>
               </div>

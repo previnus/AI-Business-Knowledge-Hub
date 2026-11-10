@@ -10,7 +10,7 @@ from psycopg.conninfo import make_conninfo
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
-from hub.ai import Draft, Evidence, ProviderUnavailable, Segment
+from hub.ai import Draft, ProviderUnavailable
 from hub.api import create_app
 from hub.auth import SESSION, token_hash
 from hub.config import Settings
@@ -69,22 +69,13 @@ class FakeProvider:
         if self.before_answer:
             self.before_answer()
         if self.fabricate:
-            return Draft(
-                segments=[Segment(text="Invented", citations=[Evidence(passage=999, quote="fake")])]
-            ), 1
+            return Draft(passages=[999]), 1
         for key, fact in FACTS.items():
             if key in question.lower():
                 for passage in passages:
                     if fact in passage["text"]:
-                        return Draft(
-                            segments=[
-                                Segment(
-                                    text=fact,
-                                    citations=[Evidence(passage=passage["passage"], quote=fact)],
-                                )
-                            ]
-                        ), 1
-        return Draft(segments=[]), 1
+                        return Draft(passages=[passage["passage"]]), 1
+        return Draft(passages=[]), 1
 
 
 @pytest.fixture

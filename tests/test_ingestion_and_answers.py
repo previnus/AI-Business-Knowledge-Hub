@@ -86,12 +86,13 @@ def test_citations_for_all_source_types_and_group_boundaries(hub, monkeypatch):
         body = response.json()
         assert body["status"] == "answered", body
         item = body["segments"][0]["citations"][0]
-        assert item["quote"] == FACTS[key]
+        assert body["segments"][0]["text"] == item["quote"]
+        assert FACTS[key] in item["quote"]
         assert item["location"] == location
         assert item["url"] == "/citation/" + item["id"]
         target = "/api/citations/" + item["id"]
         detail = client.get(target, headers=headers(ALPHA_TOKEN)).json()
-        assert FACTS[key] in detail["excerpt"]
+        assert item["quote"] == detail["excerpt"]
         assert client.get(target, headers=headers(BETA_TOKEN)).status_code == 404
         if key == "meadow":
             assert detail["original_url"] == "https://docs.test/training"

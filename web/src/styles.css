@@ -99,10 +99,9 @@ textarea { resize: vertical; min-height: 8.2rem; display: block; }
 .answer { border: 1px solid var(--rule); padding: 1.5rem; border-radius: 8px; background: white; margin-bottom: 2rem; }
 .asked-question { overflow-wrap: anywhere; }
 .answer-segment + .answer-segment { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
-.answer-segment p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.answer-segment blockquote { margin: 0 0 .6rem; padding-left: .7rem; border-left: 2px solid #b3c9ba; white-space: pre-wrap; overflow-wrap: anywhere; }
 .citations { list-style: none; padding: 0; margin: 0; }
 .citation-link { display: inline-flex; gap: .35rem; align-items: baseline; }
-.citations blockquote { margin: .3rem 0 .7rem .15rem; padding-left: .7rem; border-left: 2px solid #b3c9ba; color: var(--muted); overflow-wrap: anywhere; }
 .notice { border: 1px solid var(--rule); background: white; border-radius: 7px; padding: .8rem 1rem; }
 .error { background: #fdf2ed; color: #812d22; border-color: #e6c3b6; }
 .muted { color: var(--muted); }
