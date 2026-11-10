@@ -41,7 +41,7 @@ services:
   api:
     <<: *runtime
     environment:
-      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-https://localhost}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-https://${HUB_HOST:-localhost}}
       OIDC_ISSUER: ${OIDC_ISSUER:-}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
       OIDC_TOKEN_AUTH: ${OIDC_TOKEN_AUTH:-client_secret_basic}

@@ -39,31 +39,34 @@ jobs:
         working-directory: web
       - run: docker compose config --quiet
       - run: docker compose build api web backup
-      - name: Verify Compose startup, administrator setup, and encrypted backup
+      - name: Verify configurable HTTPS, local preview, and deployment operations
         shell: bash
-        env:
-          OIDC_ISSUER: https://identity.example.test
-          OIDC_CLIENT_ID: knowledge-hub-ci
         run: |
           umask 077
+          sed 's/^HUB_HOST=.*/HUB_HOST=hub.localhost/' .env.example > .env
           mkdir secrets backups
           openssl rand -hex 32 > secrets/postgres_password
           printf 'host=db dbname=knowledgehub user=hub_runtime password=%s\n' \
             "$(openssl rand -hex 32)" > secrets/database_url
-          printf 'synthetic-ci-value\n' > secrets/oidc_client_secret
-          printf 'synthetic-ci-value\n' > secrets/openai_api_key
+          touch secrets/oidc_client_secret secrets/openai_api_key
           sudo chgrp 10001 secrets/* backups
           sudo chmod 0640 secrets/*
           sudo chmod 0770 backups
-          docker compose up -d --wait --wait-timeout 120
+          docker compose up -d --wait --wait-timeout 120 web
           ca_file="$(mktemp)"
           docker compose exec -T web cat /data/caddy/pki/authorities/local/root.crt > "$ca_file"
-          curl --fail --silent --show-error --cacert "$ca_file" https://localhost/api/health/ready
-          test "$(curl --silent -o /dev/null -w '%{redirect_url}' http://localhost/)" = 'https://localhost/'
-          test "$(curl --silent --show-error --cacert "$ca_file" -o /dev/null -w '%{http_code}' https://localhost/api/me)" = 401
-          test "$(curl --silent --show-error --cacert "$ca_file" -o /dev/null -w '%{http_code}' https://localhost/metrics)" = 404
-          docker compose run --rm -T migrate python -m hub.manage grant-admin synthetic-admin
-          docker compose run --rm -T migrate python -m hub.manage disable-admin synthetic-admin
+          hub_curl=(curl --silent --show-error --cacert "$ca_file" --resolve hub.localhost:443:127.0.0.1)
+          "${hub_curl[@]}" --fail https://hub.localhost/api/health/ready
+          test "$(curl --silent --show-error --resolve hub.localhost:80:127.0.0.1 -o /dev/null -w '%{redirect_url}' http://hub.localhost/)" = 'https://hub.localhost/'
+          test "$("${hub_curl[@]}" -o /dev/null -w '%{http_code}' https://hub.localhost/api/auth/login)" = 503
+          test "$("${hub_curl[@]}" -o /dev/null -w '%{http_code}' https://hub.localhost/api/me)" = 401
+          test "$("${hub_curl[@]}" -X POST -H 'Origin: https://hub.localhost' -o /dev/null -w '%{http_code}' https://hub.localhost/api/ask)" = 401
+          test "$("${hub_curl[@]}" -X POST -H 'Origin: https://localhost' -o /dev/null -w '%{http_code}' https://hub.localhost/api/ask)" = 403
+          test "$("${hub_curl[@]}" -o /dev/null -w '%{http_code}' https://hub.localhost/metrics)" = 404
+          printf 'synthetic-ci-value\n' > secrets/openai_api_key
+          docker compose up -d --wait --wait-timeout 120 worker
+          docker compose run --rm -T -e OIDC_ISSUER=https://identity.example.test migrate python -m hub.manage grant-admin synthetic-admin
+          docker compose run --rm -T -e OIDC_ISSUER=https://identity.example.test migrate python -m hub.manage disable-admin synthetic-admin
           recipient="$(docker compose run --rm -T --no-deps --entrypoint sh backup -ec \
             'age-keygen -o /tmp/ci-age-key 2>/dev/null; age-keygen -y /tmp/ci-age-key')"
           AGE_RECIPIENT="$recipient" docker compose run --rm -T backup

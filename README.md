@@ -2,34 +2,40 @@
 
 Knowledge Hub answers employee questions with links to the passages it used. Central admins ingest company PDFs, Markdown and UTF-8 text files, and individual public HTTPS pages. Employees sign in through company SSO and can access sources shared with their knowledge groups.
 
-## Start with synthetic data
+## Preview locally
 
-Use Docker Engine with Compose v2, one OpenID Connect provider, and a company-approved OpenAI project. The examples below use a POSIX shell from the repository root.
+Clone the repository and use Docker Engine with Compose v2. These commands are for a fresh checkout in a Linux shell. The app can show its sign-in screen before you choose a host, an identity provider, or an OpenAI project.
 
-1. Copy `.env.example` to `.env`. Set the exact HTTPS `PUBLIC_ORIGIN`, its hostname in `HUB_HOST`, the OIDC issuer and client ID, and a comma-separated `WEB_HOSTS` allowlist. Use exact public hostnames. The default loopback binding is for local testing. For a company deployment, use the appropriate bind address and firewall rules for your network.
-2. Register a confidential web client with the identity provider. Allow authorization code flow with PKCE S256 and the exact callback `https://YOUR_HOST/api/auth/callback`. Assign the application to company employees through the provider. `OIDC_TOKEN_AUTH` defaults to `client_secret_basic` and supports `client_secret_post` if the provider requires it.
-3. Create the ignored secret directory and generate independent database passwords.
+```sh
+cp .env.example .env
+umask 077
+mkdir -p secrets
+openssl rand -hex 32 > secrets/postgres_password
+printf 'host=db dbname=knowledgehub user=hub_runtime password=%s\n' \
+  "$(openssl rand -hex 32)" > secrets/database_url
+touch secrets/oidc_client_secret secrets/openai_api_key
+sudo chgrp 10001 secrets/*
+sudo chmod 0640 secrets/*
+docker compose up -d --build --wait web
+```
+
+Open the preview at `https://localhost`. Trust the local Caddy CA in your test browser. You can export the CA certificate with `docker compose exec -T web cat /data/caddy/pki/authorities/local/root.crt`. Sign-in and ingestion become available after you configure the providers. Keep the generated database secrets with their database volume.
+
+## Configure hosting and providers
+
+1. Copy `.env.example` to `.env` on a fresh host. Set `HUB_HOST` to a bare hostname such as `knowledge.example.com` and `BIND_ADDRESS` to the server interface that should serve ports 80 and 443. Compose derives the browser origin and callback from `https://HUB_HOST`. If an existing `.env` sets `PUBLIC_ORIGIN` explicitly, remove it to use the derived value or update it to match the browser URL. For public TLS, point the hostname's DNS at the host and allow ports 80 and 443 so Caddy can obtain a certificate. [Caddy automatic HTTPS](https://caddyserver.com/docs/automatic-https)
+2. When your identity provider is ready, register a confidential web client with authorization code flow and PKCE S256. Register `https://YOUR_HOST/api/auth/callback` as the exact redirect URI and assign the application to your employees. Set `OIDC_ISSUER` and `OIDC_CLIENT_ID` in `.env`. Set `OIDC_TOKEN_AUTH=client_secret_post` if the provider requires it. For webpage ingestion, set `WEB_HOSTS` to a comma-separated list of exact public hostnames.
+3. Create the database secrets as shown above for a fresh install. Populate `secrets/oidc_client_secret` and `secrets/openai_api_key` from your secret manager once you have provider credentials. Keep `.env` and `secrets/` local to each deployment. Ensure the files are readable by container UID/GID `10001:10001`. The API and worker use a separate database login from the database owner used for migration and backup.
+4. Build and start the full stack. Use `--force-recreate` on this first full startup if you previously ran the preview or are replacing provider credentials.
 
    ```sh
-   umask 077
-   mkdir -p secrets
-   openssl rand -hex 32 > secrets/postgres_password
-   printf 'host=db dbname=knowledgehub user=hub_runtime password=%s\n' \
-     "$(openssl rand -hex 32)" > secrets/database_url
-   ```
-
-   Mount the provider credentials through `secrets/oidc_client_secret` and `secrets/openai_api_key`. Use your secret manager to populate the files. On Linux, ensure container UID/GID `10001:10001` can read the mounted files, for example with group ownership and mode `0640`. Keep the secret directory restricted on the host. The API and worker use a non-owner database login. The database, migration, and backup containers receive the database owner credential.
-4. Build, migrate, and start the app. Bootstrap the first administrator with the immutable OIDC `sub` value for the configured issuer.
-
-   ```sh
-   docker compose up -d --build
+   docker compose up -d --build --wait
    docker compose ps
    docker compose run --rm migrate python -m hub.manage grant-admin 'EXACT_OIDC_SUBJECT'
    ```
 
-   Open the configured origin. Caddy uses a local CA for `localhost`, so trust the development CA on the test machine or use a development hostname with a trusted TLS certificate. The session cookie requires HTTPS.
-   When reusing Caddy volumes from an earlier root-run deployment, grant container UID/GID `10001:10001` access to the existing certificate and configuration files before restarting.
-5. In **Administration → Manage access**, create a knowledge group. Have an employee sign in once, then assign the group to that account. In **Add source**, upload a synthetic document and select the group. After the source becomes **Active**, ask a question and open the citation. Use a second employee in a different group to verify isolation.
+   Use the administrator's immutable OIDC `sub` value from the configured issuer. When reusing Caddy volumes from an earlier root-run deployment, grant container UID/GID `10001:10001` access to the existing certificate and configuration files before restarting.
+5. Sign in at the configured HTTPS hostname. In **Administration → Manage access**, create a knowledge group. Have an employee sign in once, then assign the group to that account. In **Add source**, upload a synthetic document and select the group. After the source becomes **Active**, ask a question and open the citation. Use a second employee in a different group to verify isolation.
 
 For credential-free verification, use the integration tests below. They use a mock identity provider and mock AI responses. Keep company material out of the pilot until its data classes and the project's provider settings are approved. OpenAI receives chunk text for embeddings and the question and selected excerpts for answer generation. `store=false` disables normal Responses API storage, and the project's abuse-monitoring retention may still apply. [OpenAI API data controls](https://developers.openai.com/api/docs/guides/your-data)
 
