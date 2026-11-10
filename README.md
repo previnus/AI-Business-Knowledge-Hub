@@ -2,6 +2,8 @@
 
 Knowledge Hub answers employee questions with links to the passages it used. Central admins ingest company PDFs, Markdown and UTF-8 text files, and individual public HTTPS pages. Employees sign in through company SSO and can access sources shared with their knowledge groups.
 
+This project is licensed under the GNU General Public License version 3 only (`GPL-3.0-only`). [License text](LICENSE)
+
 ## Preview locally
 
 Clone the repository and use Docker Engine with Compose v2. These commands are for a fresh checkout in a Linux shell. The app can show its sign-in screen before you choose a host, an identity provider, or an OpenAI project.
